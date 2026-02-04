@@ -1,11 +1,11 @@
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![React](https://img.shields.io/badge/react-16.8%2B-61dafb.svg)
+
 # ComfyUI Workflow Cleaner JSX
 
 A lightweight React component for removing embedded workflow and prompt metadata from ComfyUI-generated images. Non-destructive processing ensures your image data is never touched — only metadata chunks are stripped.
 
 Live Demo: https://scuffedepoch.com/image-cleaner/
-
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![React](https://img.shields.io/badge/react-16.8%2B-61dafb.svg)
 
 ---
 
