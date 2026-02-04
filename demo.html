@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ComfyImage Stripper — Metadata Removal Tool</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg-primary: #0a0a0b;
+      --bg-secondary: #111113;
+      --bg-tertiary: #18181b;
+      --bg-elevated: #1f1f23;
+      --border-subtle: #27272a;
+      --border-accent: #3f3f46;
+      --text-primary: #fafafa;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent-primary: #22c55e;
+      --accent-secondary: #16a34a;
+      --accent-glow: rgba(34, 197, 94, 0.15);
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --gradient-mesh: radial-gradient(ellipse at 20% 0%, rgba(34, 197, 94, 0.08) 0%, transparent 50%),
+                       radial-gradient(ellipse at 80% 100%, rgba(34, 197, 94, 0.05) 0%, transparent 50%);
+    }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Outfit', -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Background effects */
+    .bg-mesh {
+      position: fixed;
+      inset: 0;
+      background: var(--gradient-mesh);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .bg-grid {
+      position: fixed;
+      inset: 0;
+      background-image: 
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .bg-noise {
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Main container */
+    .app-container {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 30px var(--accent-glow);
+    }
+
+    .logo-icon svg {
+      width: 28px;
+      height: 28px;
+      color: var(--bg-primary);
+    }
+
+    h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .tagline {
+      color: var(--text-muted);
+      font-size: 1rem;
+      margin-top: 0.5rem;
+      font-weight: 400;
+    }
+
+    .tagline code {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg-tertiary);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: var(--accent-primary);
+    }
+
+    /* Main card */
+    .main-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 20px;
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      flex: 1;
+      min-height: 350px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drop-zone::before {
+      content: '';
+      position: absolute;
+      inset: 1.5rem;
+      border: 2px dashed var(--border-accent);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .drop-zone:hover::before,
+    .drop-zone.drag-over::before {
+      border-color: var(--accent-primary);
+      background: var(--accent-glow);
+    }
+
+    .drop-zone-content {
+      text-align: center;
+      padding: 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .drop-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 1.5rem;
+      background: var(--bg-tertiary);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+
+    .drop-zone:hover .drop-icon {
+      background: var(--accent-glow);
+      transform: translateY(-4px);
+    }
+
+    .drop-icon svg {
+      width: 32px;
+      height: 32px;
+      color: var(--accent-primary);
+    }
+
+    .drop-zone h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .drop-zone p {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .supported-formats {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+
+    .format-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      padding: 0.25rem 0.6rem;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      color: var(--text-secondary);
+    }
+
+    /* Result view */
+    .result-view {
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Preview section */
+    .preview-container {
+      position: relative;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+      max-height: 400px;
+    }
+
+    .preview-container img {
+      max-width: 100%;
+      max-height: 400px;
+      object-fit: contain;
+    }
+
+    .preview-badge {
+      position: absolute;
+      top: 1rem;
+      left: 1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.6rem;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      border-radius: 6px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Stats panel */
+    .stats-panel {
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+
+    .stats-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .file-type-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.3rem 0.6rem;
+      background: var(--bg-elevated);
+      border-radius: 6px;
+      color: var(--accent-primary);
+    }
+
+    .file-name {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .status-badge.success {
+      color: var(--accent-primary);
+    }
+
+    .status-badge.neutral {
+      color: var(--text-muted);
+    }
+
+    .status-badge .icon {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Size stats */
+    .size-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .stat-item {
+      text-align: center;
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .stat-item.highlight .stat-value {
+      color: var(--accent-primary);
+    }
+
+    /* Removed metadata */
+    .removed-metadata {
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .removed-metadata h4 {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .metadata-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .metadata-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.6rem 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    .metadata-type {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--warning);
+    }
+
+    .metadata-size {
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    /* Action buttons */
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.9rem 1.5rem;
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+      color: var(--bg-primary);
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px var(--accent-glow);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--border-accent);
+      color: var(--text-primary);
+    }
+
+    /* Processing overlay */
+    .processing-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 10, 11, 0.9);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      z-index: 10;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border-subtle);
+      border-top-color: var(--accent-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error message */
+    .error-banner {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: var(--error);
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Footer */
+    .footer {
+      margin-top: 2rem;
+      text-align: center;
+      padding: 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .footer a {
+      color: var(--accent-primary);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      .app-container {
+        padding: 1.5rem 1rem;
+      }
+
+      h1 {
+        font-size: 1.75rem;
+      }
+
+      .size-stats {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        flex-direction: column;
+      }
+
+      .file-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+      }
+
+      .stats-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-noise"></div>
+  
+  <div id="root"></div>
+
+  <!-- React & Babel -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+
+  <script type="text/babel">
+    const { useState, useCallback, useRef } = React;
+
+    // PNG chunk types that contain ComfyUI metadata
+    const COMFY_PNG_CHUNK_KEYS = ['prompt', 'workflow', 'parameters'];
+
+    // JPEG markers to strip (APP1=EXIF, APP13=Photoshop/IPTC, COM=Comment)
+    const STRIP_JPEG_MARKERS = [0xE1, 0xED, 0xFE];
+
+    /**
+     * Parse PNG file and remove ComfyUI metadata chunks
+     */
+    function stripPngMetadata(buffer) {
+      const data = new Uint8Array(buffer);
+      const removedChunks = [];
+      
+      const PNG_SIGNATURE = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+      for (let i = 0; i < 8; i++) {
+        if (data[i] !== PNG_SIGNATURE[i]) {
+          throw new Error('Not a valid PNG file');
+        }
+      }
+      
+      const chunks = [];
+      let offset = 8;
+      
+      while (offset < data.length) {
+        const length = (data[offset] << 24) | (data[offset + 1] << 16) | 
+                       (data[offset + 2] << 8) | data[offset + 3];
+        
+        const type = String.fromCharCode(
+          data[offset + 4], data[offset + 5], 
+          data[offset + 6], data[offset + 7]
+        );
+        
+        const chunkSize = 4 + 4 + length + 4;
+        const chunkData = data.slice(offset, offset + chunkSize);
+        
+        let shouldStrip = false;
+        let chunkInfo = { type, length };
+        
+        if (type === 'tEXt' || type === 'iTXt' || type === 'zTXt') {
+          const dataStart = offset + 8;
+          let keyEnd = dataStart;
+          while (keyEnd < dataStart + length && data[keyEnd] !== 0) {
+            keyEnd++;
+          }
+          const keyword = new TextDecoder('latin1').decode(
+            data.slice(dataStart, keyEnd)
+          );
+          chunkInfo.keyword = keyword;
+          
+          if (COMFY_PNG_CHUNK_KEYS.includes(keyword.toLowerCase())) {
+            shouldStrip = true;
+          }
+        }
+        
+        if (shouldStrip) {
+          removedChunks.push(chunkInfo);
+        } else {
+          chunks.push(chunkData);
+        }
+        
+        offset += chunkSize;
+      }
+      
+      const totalSize = PNG_SIGNATURE.length + chunks.reduce((acc, c) => acc + c.length, 0);
+      const cleanedBuffer = new ArrayBuffer(totalSize);
+      const cleanedData = new Uint8Array(cleanedBuffer);
+      
+      for (let i = 0; i < 8; i++) {
+        cleanedData[i] = PNG_SIGNATURE[i];
+      }
+      
+      let writeOffset = 8;
+      for (const chunk of chunks) {
+        cleanedData.set(chunk, writeOffset);
+        writeOffset += chunk.length;
+      }
+      
+      return { cleanedBuffer, removedChunks, isModified: removedChunks.length > 0 };
+    }
+
+    /**
+     * Parse JPEG file and remove metadata segments
+     */
+    function stripJpegMetadata(buffer) {
+      const data = new Uint8Array(buffer);
+      const removedSegments = [];
+      
+      if (data[0] !== 0xFF || data[1] !== 0xD8) {
+        throw new Error('Not a valid JPEG file');
+      }
+      
+      const segments = [];
+      let offset = 0;
+      
+      segments.push(data.slice(0, 2));
+      offset = 2;
+      
+      while (offset < data.length - 1) {
+        if (data[offset] !== 0xFF) {
+          offset++;
+          continue;
+        }
+        
+        const marker = data[offset + 1];
+        
+        if (marker === 0xD8 || marker === 0xD9 || marker === 0x01 || 
+            (marker >= 0xD0 && marker <= 0xD7)) {
+          if (marker === 0xD9) {
+            segments.push(data.slice(offset, offset + 2));
+            offset += 2;
+            break;
+          }
+          segments.push(data.slice(offset, offset + 2));
+          offset += 2;
+          continue;
+        }
+        
+        if (marker === 0xDA) {
+          const length = (data[offset + 2] << 8) | data[offset + 3];
+          let endOffset = offset + 2 + length;
+          while (endOffset < data.length - 1) {
+            if (data[endOffset] === 0xFF && data[endOffset + 1] !== 0x00 && 
+                data[endOffset + 1] !== 0xFF) {
+              break;
+            }
+            endOffset++;
+          }
+          segments.push(data.slice(offset, endOffset));
+          offset = endOffset;
+          continue;
+        }
+        
+        if (offset + 4 > data.length) break;
+        
+        const length = (data[offset + 2] << 8) | data[offset + 3];
+        const segmentData = data.slice(offset, offset + 2 + length);
+        
+        let shouldStrip = false;
+        const markerNames = {
+          0xE0: 'APP0 (JFIF)',
+          0xE1: 'APP1 (EXIF/XMP)',
+          0xE2: 'APP2 (ICC Profile)',
+          0xED: 'APP13 (Photoshop)',
+          0xFE: 'COM (Comment)'
+        };
+        let segmentInfo = { 
+          marker: `0x${marker.toString(16).toUpperCase()}`, 
+          length,
+          name: markerNames[marker] || `APP${marker - 0xE0}`
+        };
+        
+        if (STRIP_JPEG_MARKERS.includes(marker)) {
+          const content = data.slice(offset + 4, offset + 2 + length);
+          const textContent = new TextDecoder('utf-8', { fatal: false }).decode(content);
+          
+          if (textContent.includes('{') && 
+              (textContent.includes('prompt') || textContent.includes('workflow') ||
+               textContent.includes('class_type') || textContent.includes('ComfyUI'))) {
+            shouldStrip = true;
+          }
+          
+          if (marker === 0xFE && textContent.length > 0) {
+            if (textContent.includes('{') || textContent.includes('ComfyUI')) {
+              shouldStrip = true;
+            }
+          }
+        }
+        
+        if (shouldStrip) {
+          removedSegments.push(segmentInfo);
+        } else {
+          segments.push(segmentData);
+        }
+        
+        offset += 2 + length;
+      }
+      
+      const totalSize = segments.reduce((acc, s) => acc + s.length, 0);
+      const cleanedBuffer = new ArrayBuffer(totalSize);
+      const cleanedData = new Uint8Array(cleanedBuffer);
+      
+      let writeOffset = 0;
+      for (const segment of segments) {
+        cleanedData.set(segment, writeOffset);
+        writeOffset += segment.length;
+      }
+      
+      return { cleanedBuffer, removedSegments, isModified: removedSegments.length > 0 };
+    }
+
+    function detectImageType(buffer) {
+      const data = new Uint8Array(buffer);
+      if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4E && data[3] === 0x47) {
+        return 'png';
+      }
+      if (data[0] === 0xFF && data[1] === 0xD8 && data[2] === 0xFF) {
+        return 'jpeg';
+      }
+      return 'unknown';
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
+
+    // Icons as components
+    const UploadIcon = () => (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="17 8 12 3 7 8" />
+        <line x1="12" y1="3" x2="12" y2="15" />
+      </svg>
+    );
+
+    const DownloadIcon = () => (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+      </svg>
+    );
+
+    const CheckIcon = () => (
+      <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+    );
+
+    const CircleIcon = () => (
+      <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+      </svg>
+    );
+
+    const ShieldIcon = () => (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+      </svg>
+    );
+
+    const RefreshIcon = () => (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="23 4 23 10 17 10" />
+        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+      </svg>
+    );
+
+    // Main App Component
+    function App() {
+      const [originalFile, setOriginalFile] = useState(null);
+      const [originalUrl, setOriginalUrl] = useState(null);
+      const [cleanedBlob, setCleanedBlob] = useState(null);
+      const [cleanedUrl, setCleanedUrl] = useState(null);
+      const [processing, setProcessing] = useState(false);
+      const [error, setError] = useState(null);
+      const [stats, setStats] = useState(null);
+      const [dragOver, setDragOver] = useState(false);
+      const fileInputRef = useRef(null);
+
+      const processImage = useCallback(async (file) => {
+        setProcessing(true);
+        setError(null);
+        setStats(null);
+        
+        try {
+          const buffer = await file.arrayBuffer();
+          const imageType = detectImageType(buffer);
+          
+          if (imageType === 'unknown') {
+            throw new Error('Unsupported format. Please upload a PNG or JPEG.');
+          }
+          
+          let result, mimeType;
+          
+          if (imageType === 'png') {
+            result = stripPngMetadata(buffer);
+            mimeType = 'image/png';
+            setStats({
+              type: 'PNG',
+              originalSize: buffer.byteLength,
+              cleanedSize: result.cleanedBuffer.byteLength,
+              removedItems: result.removedChunks,
+              isModified: result.isModified
+            });
+          } else {
+            result = stripJpegMetadata(buffer);
+            mimeType = 'image/jpeg';
+            setStats({
+              type: 'JPEG',
+              originalSize: buffer.byteLength,
+              cleanedSize: result.cleanedBuffer.byteLength,
+              removedItems: result.removedSegments,
+              isModified: result.isModified
+            });
+          }
+          
+          const blob = new Blob([result.cleanedBuffer], { type: mimeType });
+          
+          if (cleanedUrl) URL.revokeObjectURL(cleanedUrl);
+          if (originalUrl) URL.revokeObjectURL(originalUrl);
+          
+          setOriginalFile(file);
+          setOriginalUrl(URL.createObjectURL(file));
+          setCleanedBlob(blob);
+          setCleanedUrl(URL.createObjectURL(blob));
+          
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setProcessing(false);
+        }
+      }, [cleanedUrl, originalUrl]);
+
+      const handleFileSelect = useCallback((e) => {
+        const file = e.target.files?.[0];
+        if (file) processImage(file);
+      }, [processImage]);
+
+      const handleDrop = useCallback((e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+          processImage(file);
+        }
+      }, [processImage]);
+
+      const handleDownload = useCallback(() => {
+        if (!cleanedBlob || !originalFile) return;
+        
+        const link = document.createElement('a');
+        link.href = cleanedUrl;
+        
+        const originalName = originalFile.name;
+        const lastDot = originalName.lastIndexOf('.');
+        const baseName = lastDot > 0 ? originalName.slice(0, lastDot) : originalName;
+        const extension = lastDot > 0 ? originalName.slice(lastDot) : '.png';
+        link.download = `${baseName}_stripped${extension}`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }, [cleanedBlob, cleanedUrl, originalFile]);
+
+      const handleReset = useCallback(() => {
+        if (cleanedUrl) URL.revokeObjectURL(cleanedUrl);
+        if (originalUrl) URL.revokeObjectURL(originalUrl);
+        
+        setOriginalFile(null);
+        setOriginalUrl(null);
+        setCleanedBlob(null);
+        setCleanedUrl(null);
+        setStats(null);
+        setError(null);
+        
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }, [cleanedUrl, originalUrl]);
+
+      return (
+        <div className="app-container">
+          <header className="header">
+            <div className="logo">
+              <div className="logo-icon">
+                <ShieldIcon />
+              </div>
+              <h1>ComfyImage Stripper</h1>
+            </div>
+            <p className="tagline">
+              Remove embedded <code>workflow</code> and <code>prompt</code> metadata from ComfyUI images
+            </p>
+          </header>
+
+          <div className="main-card">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/jpg"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
+            />
+            
+            {!originalFile ? (
+              <div
+                className={`drop-zone ${dragOver ? 'drag-over' : ''}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDrop={handleDrop}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+              >
+                <div className="drop-zone-content">
+                  <div className="drop-icon">
+                    <UploadIcon />
+                  </div>
+                  <h2>Drop your image here</h2>
+                  <p>or click to browse files</p>
+                  <div className="supported-formats">
+                    <span className="format-badge">.PNG</span>
+                    <span className="format-badge">.JPG</span>
+                    <span className="format-badge">.JPEG</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="result-view">
+                <div className="preview-container">
+                  <span className="preview-badge">Preview</span>
+                  <img src={cleanedUrl} alt="Cleaned preview" />
+                </div>
+
+                {error && (
+                  <div className="error-banner">
+                    <span>⚠️ {error}</span>
+                  </div>
+                )}
+
+                {stats && (
+                  <div className="stats-panel">
+                    <div className="stats-header">
+                      <div className="file-info">
+                        <span className="file-type-badge">{stats.type}</span>
+                        <span className="file-name">{originalFile.name}</span>
+                      </div>
+                      <div className={`status-badge ${stats.isModified ? 'success' : 'neutral'}`}>
+                        {stats.isModified ? <CheckIcon /> : <CircleIcon />}
+                        {stats.isModified ? 'Metadata Removed' : 'No ComfyUI Metadata'}
+                      </div>
+                    </div>
+
+                    <div className="size-stats">
+                      <div className="stat-item">
+                        <div className="stat-label">Original</div>
+                        <div className="stat-value">{formatBytes(stats.originalSize)}</div>
+                      </div>
+                      <div className="stat-item">
+                        <div className="stat-label">Cleaned</div>
+                        <div className="stat-value">{formatBytes(stats.cleanedSize)}</div>
+                      </div>
+                      <div className="stat-item highlight">
+                        <div className="stat-label">Saved</div>
+                        <div className="stat-value">{formatBytes(stats.originalSize - stats.cleanedSize)}</div>
+                      </div>
+                    </div>
+
+                    {stats.removedItems.length > 0 && (
+                      <div className="removed-metadata">
+                        <h4>Removed Chunks</h4>
+                        <div className="metadata-list">
+                          {stats.removedItems.map((item, idx) => (
+                            <div key={idx} className="metadata-item">
+                              <span className="metadata-type">
+                                {item.type || item.name}{item.keyword ? ` (${item.keyword})` : ''}
+                              </span>
+                              <span className="metadata-size">{formatBytes(item.length)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="actions">
+                  <button className="btn btn-primary" onClick={handleDownload} disabled={!cleanedBlob}>
+                    <DownloadIcon />
+                    Download Cleaned Image
+                  </button>
+                  <button className="btn btn-secondary" onClick={handleReset}>
+                    <RefreshIcon />
+                    New Image
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {processing && (
+              <div className="processing-overlay">
+                <div className="spinner"></div>
+                <span>Processing...</span>
+              </div>
+            )}
+          </div>
+
+          <footer className="footer">
+            Non-destructive metadata removal — image data is never modified
+          </footer>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
